@@ -4,6 +4,7 @@ const multer = require('multer');
 require('dotenv').config();
 const port = process.env.PORT;
 const app = express();
+require('dotenv').config();
 
 app.use(cors()); // Allow cross-origin requests if needed
 app.use(express.json()); // For JSON data
