@@ -101,7 +101,7 @@ const Menu = {
     },    
 
     getItemByCategoryId: (category_id, callback = () => {}) => {
-        const query = "SELECT * FROM list_category_item WHERE category_id = ?";
+        const query = "SELECT i.*,c.category_name FROM list_category_item i JOIN list_category c ON i.category_id = c.category_id WHERE i.category_id = ?";
         db.query(query, [category_id], (err, results) => {  
             if (err) return callback(err, null);
                 if (results.length === 0) {

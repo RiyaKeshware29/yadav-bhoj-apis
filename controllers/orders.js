@@ -144,12 +144,11 @@ exports.updateOrderStatus = [
       if (!order_id || !flag) return res.status(400).json({ message: "order_id and flag are required" });
   
       const masterStatus = flag === "accepted" ? "accepted" : "rejected";
-      const acceptStatus = flag === "accepted" ? "pending" : "rejected";
   
       Order.updateOrderMasterStatus(order_id, masterStatus, (err) => {
         if (err) return res.status(500).json({ message: "Error updating order_master", error: err });
   
-        Order.updateOrderDetailsStatus(order_id, acceptStatus, null, (err) =>
+        Order.updateOrderDetailsStatus(order_id, masterStatus, null, (err) =>
           err ? res.status(500).json({ message: "Error updating order_details", error: err })
             : res.status(200).json({ message: `Order ${flag} successfully`, order_id })
         );

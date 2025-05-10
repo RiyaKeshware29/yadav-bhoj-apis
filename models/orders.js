@@ -35,10 +35,11 @@ const Order = {
             SELECT 
                 om.order_id,
                 om.table_no, 
+                om.status, 
                 od.item_id, 
                 om.total_price, 
                 om.payment_status, 
-                om.date_time, 
+                DATE_FORMAT(om.date_time, '%Y-%m-%d %h:%i %p') AS date_time,
                 od.order_status, 
                 od.quantity,
                 li.item_name,
@@ -50,31 +51,37 @@ const Order = {
         `;
     
         db.query(query, [order_id], callback); 
-    },  
-    
+    }, 
+
     getOrderByTable: (table, callback) => {
         let query = `
             SELECT 
                 om.table_no,
-                MAX(om.order_id) AS last_order_id,
-                MAX(om.total_price) AS total_price,
-                MAX(om.payment_status) AS payment_status,
-                MAX(om.date_time) AS date_time,
-                MAX(om.status) AS status,
-                CASE 
-                    WHEN SUM(CASE WHEN od.order_status = 'done' THEN 1 ELSE 0 END) = COUNT(*) 
-                    THEN 'empty'
-                    ELSE 'active'
-                END AS table_activity,
+                om.order_id AS last_order_id,
+                om.total_price,
+                om.payment_status,
+                DATE_FORMAT(om.date_time, '%Y-%m-%d %h:%i %p') AS date_time,
+                om.status,
+            CASE 
+                WHEN SUM(CASE WHEN om.status = 'done' OR om.status = 'rejected' THEN 1 ELSE 0 END) = COUNT(*) 
+                THEN 'empty'
+                ELSE 'active'
+            END AS table_activity,
                 JSON_ARRAYAGG(
                     JSON_OBJECT(
                         'item_id', li.item_id,
                         'name', li.item_name,
-                        'quantity', od.quantity,
-                        'order_status', od.order_status
+                        'order_status', od.order_status,
+                        'quantity', od.quantity
                     )
                 ) AS ordered_items
             FROM order_master om
+            JOIN (
+                SELECT table_no, MAX(date_time) AS latest_time
+                FROM order_master
+                WHERE DATE(date_time) = CURDATE()
+                GROUP BY table_no
+            ) latest ON om.table_no = latest.table_no AND om.date_time = latest.latest_time
             JOIN order_details od ON om.order_id = od.order_id
             JOIN list_category_item li ON od.item_id = li.item_id
         `;
@@ -82,28 +89,31 @@ const Order = {
         const params = [];
     
         if (table && table !== '') {
-            query += ` WHERE om.table_no = ? GROUP BY om.table_no`;
+            query += ` WHERE om.table_no = ?`;
             params.push(table);
-        } else {
-            query += ` GROUP BY om.table_no`;
         }
     
+        query += ` GROUP BY om.order_id`;
+        query += ` ORDER BY om.date_time DESC`;
+    
         db.query(query, params, callback);
-    },       
+    },    
+            
 
     createOrderMaster: ({ uid, table_no, total_price, payment_status }, callback) => {
         db.query("SELECT value FROM id_value WHERE prefix = 'ORD'", (err, result) => {
             if (err) return callback(err);
+            const currentDateTime = new Date(); 
 
             let lastValue = result.length > 0 ? result[0].value : 0;
             let newValue = lastValue + 1;
             let order_id = `ORD${newValue}`;
 
             const insertOrderQuery = `
-                INSERT INTO order_master (order_id, uid, table_no, total_price, payment_status, status)
-                VALUES (?, ?, ?, ?, ?, ?)`;
+                INSERT INTO order_master (order_id, uid, table_no, total_price, payment_status, date_time, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
-            db.query(insertOrderQuery, [order_id, uid, table_no, total_price, payment_status || 'unpaid','pending'], (err, res) => {
+            db.query(insertOrderQuery, [order_id, uid, table_no, total_price, payment_status || 'unpaid',currentDateTime,'pending'], (err, res) => {
                 if (err) return callback(err);
 
                 db.query("UPDATE id_value SET value = ? WHERE prefix = 'ORD'", [newValue], (err) => {
